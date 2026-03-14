@@ -82,3 +82,134 @@
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+.review-panel {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.review-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.review-panel-header h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.review-status {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.status-success {
+  color: #059669;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.status-error {
+  color: #dc2626;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.status-warning {
+  color: #d97706;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  background: #eff6ff;
+  color: #3b82f6;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-small:hover {
+  background: #dbeafe;
+}
+
+.issues-list {
+  margin-bottom: 16px;
+}
+
+.issues-list h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+.issue-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.issue-type {
+  font-weight: 600;
+  font-size: 13px;
+  color: #dc2626;
+  margin-bottom: 4px;
+}
+
+.issue-location {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.issue-desc {
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.issue-suggestion {
+  font-size: 13px;
+  color: #059669;
+}
+
+.review-report {
+  margin-top: 16px;
+}
+
+.review-report h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+.review-report pre {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+}

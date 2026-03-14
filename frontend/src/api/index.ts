@@ -20,14 +20,34 @@ export interface GraphData {
   edges: Array<{
     from: string
     to: string
+    sourceHandle?: string | null
     condition?: string
   }>
   workflowConfig: Record<string, any>
 }
 
+export interface ReviewResult {
+  success: boolean
+  has_errors: boolean
+  syntax_valid: boolean
+  issues: Array<{
+    type: string
+    location: string
+    issue: string
+    suggestion: string
+  }>
+  review_report: string
+  fixed_code: string
+}
+
 export const generateCode = async (graphData: GraphData): Promise<string> => {
   const response = await api.post('/api/generate', graphData)
   return response.data.code
+}
+
+export const reviewCode = async (code: string): Promise<ReviewResult> => {
+  const response = await api.post('/api/review-code', { code })
+  return response.data
 }
 
 export default api

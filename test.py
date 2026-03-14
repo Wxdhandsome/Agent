@@ -21,6 +21,11 @@ class AgentState(TypedDict):
     messages: List[Dict[str, str]]
     query: str
     output: str
+    arg1: str
+    arg2: str
+    result1: str
+    result2: str
+    请勿询问与面试无关内容: str
 
 # ========================================
 # Global Variables & Configuration
@@ -42,6 +47,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Workflow Configuration
+RUN_MODE = "single"
+INTERACTION_TYPE = "input"
+ENABLE_DIALOG_INPUT = True
+ENABLE_FORM_INPUT = False
+ENABLE_FILE_UPLOAD = False
+OUTPUT_VARIABLE = "output"
 
 # ========================================
 # Data Validation & Component Communication
@@ -114,7 +126,7 @@ def llm_node(state: AgentState) -> AgentState:
 
     # Build messages from chat history
     chat_messages = []
-    system_prompt = format_prompt("""You are a helpful assistant.""", state, global_vars)
+    system_prompt = format_prompt("""/nothink你是一个意图判断专家，根据输入{query}来判断用户的意图意图进行判断，如果意图是面试返回面试，其他意图返回闲聊，你的回复只有“面试”和“闲聊”这两种""", state, global_vars)
     chat_messages.append(SystemMessage(content=system_prompt))
 
     # Add previous messages from state
@@ -134,7 +146,7 @@ def llm_node(state: AgentState) -> AgentState:
     # 确保query一致性：直接使用，不进行任何修改
     query = ComponentData.ensure_query_consistency(raw_query)
 
-    user_prompt_template = """{{query}}"""
+    user_prompt_template = """{query}"""
     logger.info(f"[DataFlow] 使用用户提示词模板: {repr(user_prompt_template)}")
     # 确保query被嵌入到用户提示词中
     user_prompt_formatted = format_prompt(user_prompt_template, state, global_vars)
@@ -158,32 +170,9 @@ def llm_node(state: AgentState) -> AgentState:
     state["messages"] = new_messages
 
     # Update state with output (各输出变量 + 统一 output 供输出节点使用)
-    state["output"] = response.content
-
-    return state
-
-def code_node(state: AgentState) -> AgentState:
-    """
-    Node: 代码 (code)
-    """
-    global_vars = get_global_vars()
-
-    # Extract and validate inputs from state
-    output = state.get("output", "")
-    if not ComponentData.validate_input(output, 'string'):
-        raise ValueError(f"Invalid output type: expected string, got {type(output)}")
-    logger.debug(f"[DataFlow] 代码节点接收到output: {repr(output)}")
-
-    # Execute custom code
-    try:
-        result = state['output'].upper()
-        state['output'] = result
-    except Exception as e:
-        logger.error(f"Error in 代码: {e}")
-        raise
-
-    # Update state with outputs
-    # state["output"] = ... (set in custom code)
+    state["result1"] = response.content
+    state["result2"] = response.content
+    state["output"] = response.content  # 供输出节点默认展示
 
     return state
 
@@ -199,6 +188,94 @@ def output_node(state: AgentState) -> AgentState:
     print(f"\nOutput: {output_value}")
     return state
 
+def condition_node(state: AgentState) -> AgentState:
+    """
+    Node: 条件分支 (condition)
+    """
+    global_vars = get_global_vars()
+
+    # Condition node - routing handled by conditional edges
+    # 条件1: true
+    return state
+
+def output_node_2(state: AgentState) -> AgentState:
+    """
+    Node: 输出 (output)
+    """
+    global_vars = get_global_vars()
+
+    # Output node
+    output_value = state.get("请勿询问与面试无关内容", "")
+    logger.info(f"[DataFlow] 输出节点值: {repr(output_value)}")
+    print(f"\nOutput: {output_value}")
+    return state
+
+def llm_node_2(state: AgentState) -> AgentState:
+    """
+    Node: 大模型 (llm)
+    """
+    global_vars = get_global_vars()
+
+    # Initialize LLM: Qwen3-32B-FP8
+    llm = ChatOpenAI(
+        base_url="http://1.194.201.134:50178/v1",
+        api_key="kJ94sWuDogW49zapnePumpVRQgFcz2O1jb3S7C35ZoHp8HRnVdz1CryyyZftsEmFHFKS4egaoY1Jyvvi",
+        model="Qwen3-32B-FP8",
+        temperature=0.7,
+    )
+
+    # Build messages from chat history
+    chat_messages = []
+    system_prompt = format_prompt("""根据用户{query}来生成一个相关的面试问题""", state, global_vars)
+    chat_messages.append(SystemMessage(content=system_prompt))
+
+    # Add previous messages from state
+    messages_history = state.get("messages", [])
+    for msg in messages_history:
+        if msg["role"] == "user":
+            chat_messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            chat_messages.append(AIMessage(content=msg["content"]))
+
+    # Get current user input - 确保query变量完全一致
+    raw_query = state.get("query", "")
+    logger.info(f"[DataFlow] LLM节点接收到query: {repr(raw_query)}")
+    # 验证query数据类型
+    if not ComponentData.validate_input(raw_query, 'str'):
+        raise ValueError(f"Invalid query type: expected str, got {type(raw_query)}")
+    # 确保query一致性：直接使用，不进行任何修改
+    query = ComponentData.ensure_query_consistency(raw_query)
+
+    user_prompt_template = """{query}"""
+    logger.info(f"[DataFlow] 使用用户提示词模板: {repr(user_prompt_template)}")
+    # 确保query被嵌入到用户提示词中
+    user_prompt_formatted = format_prompt(user_prompt_template, state, global_vars)
+    logger.info(f"[DataFlow] 格式化后的用户提示词: {repr(user_prompt_formatted)}")
+    current_user_input = user_prompt_formatted
+
+    # Only add current user input if not already in history (or if history is empty)
+    if not messages_history or messages_history[-1].get("role") != "user":
+        chat_messages.append(HumanMessage(content=current_user_input))
+
+    # Invoke LLM
+    response = llm.invoke(chat_messages)
+
+    # Update chat history in state
+    new_messages = messages_history.copy()
+    # Only add user message if not already in history
+    if not new_messages or new_messages[-1].get("role") != "user":
+        new_messages.append({"role": "user", "content": current_user_input})
+    # Add assistant response
+    new_messages.append({"role": "assistant", "content": response.content})
+    state["messages"] = new_messages
+
+    # Update state with output (各输出变量 + 统一 output 供输出节点使用)
+    state["result1"] = response.content
+    state["result2"] = response.content
+    state["output"] = response.content  # 供输出节点默认展示
+
+    return state
+
 # ========================================
 # Build Graph
 # ========================================
@@ -208,20 +285,32 @@ def build_graph():
     workflow = StateGraph(AgentState)
 
     # Node: 输入 (input)
-    workflow.add_node("input", input_node)
+    workflow.add_node("node_1773473160968", input_node)
     # Node: 大模型 (llm)
-    workflow.add_node("llm_node", llm_node)
-    # Node: 代码 (code)
-    workflow.add_node("code_node", code_node)
+    workflow.add_node("node_1773473166782", llm_node)
     # Node: 输出 (output)
-    workflow.add_node("output", output_node)
+    workflow.add_node("node_1773473176366", output_node)
+    # Node: 条件分支 (condition)
+    workflow.add_node("node_1773476561067", condition_node)
+    # Node: 输出 (output)
+    workflow.add_node("node_1773476593651", output_node_2)
+    # Node: 大模型 (llm)
+    workflow.add_node("node_1773476644850", llm_node_2)
 
     # Define edges between nodes
-    workflow.set_entry_point("input")
-    workflow.add_edge("input", "llm_node")  # 输入 → 大模型
-    workflow.add_edge("llm_node", "code_node")  # 大模型 → 代码
-    workflow.add_edge("code_node", "output")  # 代码 → 输出
-    workflow.add_edge("output", END)
+    workflow.set_entry_point("node_1773473160968")
+    workflow.add_edge("node_1773473160968", "node_1773473166782")  # 输入 → 大模型
+    workflow.add_edge("node_1773473166782", "node_1773476561067")  # 大模型 → 条件分支
+    workflow.add_edge("node_1773476644850", "node_1773473176366")  # 大模型 → 输出
+    def _route_node_1773476561067(state: AgentState):
+        try:
+            if True:
+                return "node_1773476593651"
+        except Exception:
+            pass
+        return "node_1773476644850"
+
+    workflow.add_conditional_edges("node_1773476561067", _route_node_1773476561067)
 
 
     # Compile and return the graph
@@ -271,59 +360,56 @@ def get_global_vars() -> Dict[str, Any]:
 # Run the Workflow
 # ========================================
 
+def run_interactive_mode():
+    """运行交互式对话模式。"""
+    app = build_graph()
+    current_state: AgentState = {
+        "messages": [],
+        "query": "",
+        "arg1": "",
+        "arg2": "",
+        "result1": "",
+        "result2": "",
+        "output": "",
+        "请勿询问与面试无关内容": "",
+    }
+
+    print("\n=== 交互式对话模式 ===")
+    print("输入 'quit' 或 'exit' 退出程序")
+    print("-" * 50)
+
+    while True:
+        try:
+            user_input = input("\n用户: ")
+            if user_input.lower() in ["quit", "exit", "q"]:
+                print("\n再见!")
+                break
+            if not user_input.strip():
+                print("请输入有效内容!")
+                continue
+
+            logger.info(f"[Interactive] 用户输入: {repr(user_input)}")
+
+            current_state["query"] = user_input
+            logger.info(f'[Interactive] 当前状态 query: {repr(current_state["query"])}')
+
+            print("\n正在处理...")
+            current_state = app.invoke(current_state)
+
+        except KeyboardInterrupt:
+            print("\n\n程序已被用户中断")
+            break
+        except Exception as e:
+            logger.error(f"运行错误: {e}")
+            print(f"\n错误: {e}")
+            continue
+
 if __name__ == "__main__":
     print("=" * 50)
     print("LangFlow Workflow")
     print("=" * 50)
 
-    # Build the graph
-    app = build_graph()
-
     # ========================================
-    # Example: Single Turn Conversation
+    # 直接启动交互式对话模式
     # ========================================
-    print("\nSingle Turn Example:")
-    print("-" * 30)
-    test_query = "Hello, how can I help you today?"
-    logger.info(f"[Test] 测试用户输入: {repr(test_query)}")
-    initial_state: AgentState = {
-        "messages": [],
-        "query": test_query,
-        "output": "",
-    }
-
-    print("\nRunning workflow...")
-    result = app.invoke(initial_state)
-
-    print("\nWorkflow Result:")
-    print("-" * 30)
-    if 'OUTPUT_VARIABLE' in locals():
-        print(result.get(OUTPUT_VARIABLE, result))
-    else:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-    print("-" * 30)
-
-    # ========================================
-    # Example: Multi-Turn Conversation
-    # ========================================
-    print("\n\nMulti-Turn Example:")
-    print("-" * 30)
-    # Continue conversation using the result state from previous turn
-    next_state = result.copy()
-    next_test_query = "What can you do?"
-    logger.info(f"[Test] 第二轮测试用户输入: {repr(next_test_query)}")
-    next_state["query"] = next_test_query
-    print(f'\nUser: {next_state["query"]}')
-
-    print("\nRunning next turn...")
-    next_result = app.invoke(next_state)
-
-    print("\nNext Result:")
-    print("-" * 30)
-    if 'OUTPUT_VARIABLE' in locals():
-        print(next_result.get(OUTPUT_VARIABLE, next_result))
-    else:
-        print(json.dumps(next_result, indent=2, ensure_ascii=False))
-    print("-" * 30)
-
-    print("\nDone!")
+    run_interactive_mode()

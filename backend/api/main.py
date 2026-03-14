@@ -7,7 +7,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from generator import CodeGenerator
+from generator import CodeGenerator, CodeReviewer
 
 app = FastAPI(title="LangFlow API")
 
@@ -29,6 +29,10 @@ class GraphData(BaseModel):
     workflowConfig: Dict[str, Any] = {}
 
 
+class CodeReviewData(BaseModel):
+    code: str
+
+
 @app.get("/")
 async def root():
     return {"message": "LangFlow API is running"}
@@ -47,6 +51,27 @@ async def generate_code(graph_data: GraphData):
             data.get("workflowConfig")
         )
         return {"success": True, "code": code}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/review-code")
+async def review_code(review_data: CodeReviewData):
+    try:
+        data = review_data.model_dump()
+        code = data.get("code", "")
+        
+        reviewer = CodeReviewer()
+        review_result = reviewer.review(code)
+        
+        return {
+            "success": True,
+            "has_errors": review_result.get("has_errors", False),
+            "syntax_valid": review_result.get("syntax_valid", True),
+            "issues": review_result.get("issues", []),
+            "review_report": review_result.get("review_report", ""),
+            "fixed_code": review_result.get("fixed_code", code)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
